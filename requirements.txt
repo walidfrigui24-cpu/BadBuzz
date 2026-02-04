@@ -4,3 +4,4 @@ plotly
 requests
 nest_asyncio
 youtube-search-python
+textblob
