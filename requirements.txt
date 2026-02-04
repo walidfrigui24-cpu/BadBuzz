@@ -4,4 +4,8 @@ plotly
 requests
 nest_asyncio
 youtube-search-python
-textblob
+transformers
+torch
+sentencepiece
+protobuf
+tf-keras
