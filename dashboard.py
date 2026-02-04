@@ -1,5 +1,5 @@
 import sys
-import asyncio\\
+import asyncio
 
 # Correctif Windows
 if sys.platform == "win32":
@@ -60,7 +60,7 @@ def analyze_local_advanced(text):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("Paramètres")
+    st.header("⚙️ Paramètres")
     source_mode = st.radio("Source", ["Twitter (X)", "YouTube", "Fusion (Twitter + YouTube)"])
     
     with st.form("search_form"):
@@ -93,7 +93,8 @@ with st.sidebar:
         st.subheader("4. Volume")
         limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
         
-        # --- LANGUE (PLACÉE EN DERNIER) ---
+        # --- LANGUE (EN BAS) ---
+        st.markdown("---") 
         lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
         
         # BOUTON LANCER
@@ -129,7 +130,7 @@ if btn_start:
     if "YouTube" in source_mode:
         y_client = YouTubeClient()
         y_query = f"{query_main} {query_exact} {query_any}".strip() or "Actualités"
-        with st.spinner("🎥 YouTube..."):
+        with st.spinner("YouTube..."):
             y_results = y_client.search_videos(y_query, limit=limit)
             final_data.extend(y_results)
             st.success(f"YouTube : {len(y_results)} vidéos")
@@ -158,10 +159,8 @@ if btn_start:
         
         st.divider()
 
-        # =========================================================
-        #  1. FILTRAGE & KPIs (EN HAUT DE LA PAGE)
-        # =========================================================
-        st.markdown("### Contrôle & Synthèse")
+        # --- FILTRES & KPIs ---
+        st.markdown("### 🔍 Contrôle")
         sel_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
         df_filtered = df[df['sentiment'].isin(sel_sentiments)]
 
@@ -175,9 +174,7 @@ if btn_start:
             
             st.divider()
 
-            # =========================================================
-            #  2. GRAPHIQUES STRATEGIQUES (Top Détracteurs & Solde)
-            # =========================================================
+            # --- GRAPHIQUES (TOP & TREND) ---
             c_detract, c_trend = st.columns(2)
 
             with c_detract:
@@ -189,11 +186,19 @@ if btn_start:
                     fig.update_layout(yaxis=dict(autorange="reversed"), height=350, title=None)
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.success("R.A.S (Aucun contenu négatif)")
+                    st.success("R.A.S")
 
             with c_trend:
                 st.subheader("Solde Net (4H)")
                 df_tr = df_filtered.dropna(subset=['date'])
+                
+                # --- PATCH: FILTRE STRICT SUR LES DATES ---
+                # On force le retrait de tout ce qui dépasse date_start ou date_end
+                # pour éviter l'affichage de données parasites dans le graphique temporel
+                mask_date = (df_tr['date'] >= pd.Timestamp(date_start)) & (df_tr['date'] <= pd.Timestamp(date_end) + pd.Timedelta(days=1))
+                df_tr = df_tr[mask_date]
+                # ------------------------------------------
+
                 df_pol = df_tr[df_tr['sentiment'] != 'Neutre']
                 if not df_pol.empty:
                     try:
@@ -206,14 +211,12 @@ if btn_start:
                         fig = px.bar(agg, x="date", y="net", color="label", color_discrete_map=COLOR_MAP)
                         fig.update_layout(showlegend=False, height=350, bargap=0.2)
                         st.plotly_chart(fig, use_container_width=True)
-                    except: st.warning("Données temporelles insuffisantes")
-                else: st.info("Pas assez de données pour le solde.")
+                    except: st.warning("Données insuffisantes")
+                else: st.info("Pas de données polarisées dans cette période.")
 
             st.divider()
 
-            # =========================================================
-            #  3. GRAPHIQUES GLOBAUX (Répartition & Matrice)
-            # =========================================================
+            # --- GLOBAL VIZ ---
             g1, g2 = st.columns([1, 2])
             with g1:
                 st.subheader("Répartition")
@@ -227,9 +230,7 @@ if btn_start:
                                hover_data=['text', 'author'], size="metrics", size_max=50)
                 st.plotly_chart(fig, use_container_width=True)
             
-            # =========================================================
-            #  4. TABLEAU DE DONNÉES
-            # =========================================================
+            # --- TABLEAU ---
             st.subheader("Registre")
             disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']]
             st.dataframe(disp, use_container_width=True, 
@@ -241,4 +242,3 @@ if btn_start:
             st.warning("Aucune donnée pour ce filtre.")
     else:
         st.warning("Aucun résultat.")
-
