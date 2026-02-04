@@ -60,7 +60,7 @@ def analyze_local_advanced(text):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("⚙️ Paramètres")
+    st.header("Paramètres")
     source_mode = st.radio("Source", ["Twitter (X)", "YouTube", "Fusion (Twitter + YouTube)"])
     
     with st.form("search_form"):
@@ -69,6 +69,8 @@ with st.sidebar:
         query_exact = st.text_input("Phrase Exacte", placeholder="Ex: La direction a démissionné")
         query_any = st.text_input("Optionnels (OR)", placeholder="Ex: Urgent, Alerte")
         query_exclude = st.text_input("Exclusions (NOT)", placeholder="Ex: Sport, Concert")
+                # --- LANGUE (DÉPLACÉE ICI) ---
+        lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
         
         st.subheader("2. Période")
         d1, d2 = st.columns(2)
@@ -93,10 +95,6 @@ with st.sidebar:
         st.subheader("4. Volume")
         limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
         
-        # --- LANGUE (DÉPLACÉE ICI) ---
-        st.markdown("---") 
-        lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
-        
         # BOUTON LANCER
         btn_start = st.form_submit_button("Lancer l'Analyse")
 
@@ -118,7 +116,7 @@ if btn_start:
             "links_filter": links_filter, "replies_filter": replies_filter,
             "since": date_start.strftime("%Y-%m-%d"), "until": date_end.strftime("%Y-%m-%d")
         }
-        status_t = st.status("📡 Twitter...", expanded=True)
+        status_t = st.status("Twitter...", expanded=True)
         for update in t_client.fetch_tweets_generator(params_t, limit):
             if "error" in update: st.error(update['error']); break
             status_t.update(label=f"Twitter : {update.get('count', 0)}")
@@ -223,7 +221,7 @@ if btn_start:
                 st.plotly_chart(fig, use_container_width=True)
             
             # --- TABLEAU ---
-            st.subheader("📋 Registre")
+            st.subheader("Registre")
             disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']]
             st.dataframe(disp, use_container_width=True, 
                          column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d 👁️"),
@@ -234,3 +232,4 @@ if btn_start:
             st.warning("Aucune donnée pour ce filtre.")
     else:
         st.warning("Aucun résultat.")
+
