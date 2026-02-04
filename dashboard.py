@@ -77,6 +77,9 @@ with st.sidebar:
         date_start = d1.date_input("Début", datetime.now() - timedelta(days=7))
         date_end = d2.date_input("Fin", datetime.now())
 
+                st.subheader("4. Volume")
+        limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
+        
         # Filtres Twitter (Sans la langue)
         if "Twitter" in source_mode:
             with st.expander("3. Filtres Avancés (Twitter)"):
@@ -91,9 +94,6 @@ with st.sidebar:
             from_accts, to_accts, mention_accts = "", "", ""
             min_faves, min_retweets = 0, 0
             links_filter, replies_filter = "Tous", "Tous"
-
-        st.subheader("4. Volume")
-        limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
         
         # BOUTON LANCER
         btn_start = st.form_submit_button("Lancer l'Analyse")
@@ -232,4 +232,5 @@ if btn_start:
             st.warning("Aucune donnée pour ce filtre.")
     else:
         st.warning("Aucun résultat.")
+
 
