@@ -1,0 +1,6 @@
+streamlit
+pandas
+plotly
+requests
+nest_asyncio
+youtube-search-python
