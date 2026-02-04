@@ -1,5 +1,5 @@
 import sys
-import asyncio
+import asyncio\\
 
 # Correctif Windows
 if sys.platform == "win32":
@@ -60,7 +60,7 @@ def analyze_local_advanced(text):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("⚙️ Paramètres")
+    st.header("Paramètres")
     source_mode = st.radio("Source", ["Twitter (X)", "YouTube", "Fusion (Twitter + YouTube)"])
     
     with st.form("search_form"):
@@ -94,7 +94,6 @@ with st.sidebar:
         limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
         
         # --- LANGUE (PLACÉE EN DERNIER) ---
-        st.markdown("---") 
         lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
         
         # BOUTON LANCER
@@ -118,7 +117,7 @@ if btn_start:
             "links_filter": links_filter, "replies_filter": replies_filter,
             "since": date_start.strftime("%Y-%m-%d"), "until": date_end.strftime("%Y-%m-%d")
         }
-        status_t = st.status("📡 Twitter...", expanded=True)
+        status_t = st.status("Twitter...", expanded=True)
         for update in t_client.fetch_tweets_generator(params_t, limit):
             if "error" in update: st.error(update['error']); break
             status_t.update(label=f"Twitter : {update.get('count', 0)}")
@@ -162,7 +161,7 @@ if btn_start:
         # =========================================================
         #  1. FILTRAGE & KPIs (EN HAUT DE LA PAGE)
         # =========================================================
-        st.markdown("### 🔍 Contrôle & Synthèse")
+        st.markdown("### Contrôle & Synthèse")
         sel_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
         df_filtered = df[df['sentiment'].isin(sel_sentiments)]
 
@@ -242,3 +241,4 @@ if btn_start:
             st.warning("Aucune donnée pour ce filtre.")
     else:
         st.warning("Aucun résultat.")
+
