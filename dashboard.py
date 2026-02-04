@@ -33,9 +33,6 @@ st.markdown("""
 COLOR_MAP = {'Positif': '#17bf63', 'Négatif': '#e0245e', 'Neutre': '#657786'}
 
 # --- 🧠 تحميل الموديل محلياً (The Brain) ---
-# نستخدم @st.cache_resource لكي يتم تحميل الموديل مرة واحدة فقط عند تشغيل البرنامج
-# الموديل يتم تخزينه في الرام ولا يعاد تحميله مع كل ضغطة زر
-
 @st.cache_resource
 def load_local_model():
     """
@@ -43,15 +40,14 @@ def load_local_model():
     يعمل محلياً بدون إنترنت بعد التحميل الأول.
     """
     model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
-    # تحميل البايبلاين (المحرك)
     sentiment_pipeline = pipeline("sentiment-analysis", model=model_name, tokenizer=model_name)
     return sentiment_pipeline
 
-# تحميل الموديل الآن (سيظهر سبينر في البداية فقط)
-with st.spinner("جارٍ تحميل الدماغ الإلكتروني (AI Model) إلى الذاكرة... يرجى الانتظار دقيقة..."):
+# تحميل الموديل
+with st.spinner("جارٍ تحميل الدماغ الإلكتروني (AI Model)... يرجى الانتظار..."):
     try:
         ai_pipeline = load_local_model()
-        st.sidebar.success("✅ AI Model Loaded (Local)")
+        st.sidebar.success("AI Model Loaded (Local)")
     except Exception as e:
         st.error(f"فشل تحميل الموديل: {e}")
         ai_pipeline = None
@@ -61,15 +57,11 @@ def analyze_local_advanced(text):
     if not ai_pipeline: return 0.0, "Neutre"
     
     try:
-        # قص النص لتجنب خطأ الطول (512 حرف)
         safe_text = str(text)[:512]
-        
-        # التنبؤ
         result = ai_pipeline(safe_text)[0]
-        label = result['label'] # Positive, Negative, Neutral
+        label = result['label']
         score = result['score']
         
-        # توحيد التسميات
         if label.lower() == 'positive': return score, "Positif"
         elif label.lower() == 'negative': return -score, "Négatif"
         else: return 0.0, "Neutre"
@@ -111,7 +103,7 @@ with st.sidebar:
 
         st.subheader("4. Volume")
         limit = st.number_input("Limite", 10, 5000, 100, step=50)
-        btn_start = st.form_submit_button("🚀 Lancer")
+        btn_start = st.form_submit_button("Lancer")
 
 # --- DASHBOARD ---
 st.title("🛡️ War Room (Local Advanced AI)")
@@ -155,13 +147,11 @@ if btn_start:
 
         st.info(f"Analyse IA Locale en cours ({len(df)} éléments)...")
         
-        # الشريط التقدمي
         scores = []
         sentiments = []
         progress_bar = st.progress(0)
         
         for i, text in enumerate(df['text']):
-            # استدعاء الموديل المحلي
             s, l = analyze_local_advanced(str(text))
             scores.append(s)
             sentiments.append(l)
@@ -190,28 +180,62 @@ if btn_start:
             st.success("R.A.S")
 
         # B. FILTRAGE
-        st.markdown("### 🔍 Filtrage")
-        selected_sentiments = st.multiselect("Filtre :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
+        st.divider()
+        st.markdown("### 🔍 Filtrage & Visualisation")
+        selected_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
         df_filtered = df[df['sentiment'].isin(selected_sentiments)]
 
         if not df_filtered.empty:
+            # --- KPIs ---
             c1, c2, c3 = st.columns(3)
-            c1.metric("Volume", len(df_filtered))
-            c2.metric("Impact Total", f"{df_filtered['metrics'].sum():,}")
-            neg_pct = round((len(df_filtered[df_filtered['sentiment'] == 'Négatif']) / len(df_filtered)) * 100, 1)
+            c1.metric("Volume Analysé", len(df_filtered))
+            c2.metric("Impact Total (Engagement)", f"{df_filtered['metrics'].sum():,}")
+            
+            neg_vol = len(df_filtered[df_filtered['sentiment'] == 'Négatif'])
+            neg_pct = round((neg_vol / len(df_filtered)) * 100, 1)
             c3.metric("Taux Négativité", f"{neg_pct}%", delta_color="inverse")
 
-            g1, g2 = st.columns(2)
-            with g1:
-                st.plotly_chart(px.pie(df_filtered, names='sentiment', color='sentiment', color_discrete_map=COLOR_MAP), use_container_width=True)
-            with g2:
-                st.plotly_chart(px.bar(df_filtered, x='source', y='metrics', color='sentiment', barmode='group', color_discrete_map=COLOR_MAP), use_container_width=True)
+            # --- GRAPHIQUES (Mise à jour demandée) ---
+            g1, g2 = st.columns([1, 2])
             
-            st.subheader("📋 Données")
-            disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics']].copy()
-            st.dataframe(disp, use_container_width=True, column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d 👁️")})
+            with g1:
+                st.subheader("Répartition des Avis")
+                # Pie Chart
+                fig_pie = px.pie(df_filtered, names='sentiment', color='sentiment', color_discrete_map=COLOR_MAP)
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            with g2:
+                st.subheader("Impact vs Sentiment")
+                # Scatter Plot (Bubble Chart) - المخطط الذي طلبته
+                # المحور السيني: Engagement (Metrics)
+                # المحور الصادي: Sentiment Score
+                # حجم الدائرة: Engagement
+                fig_scatter = px.scatter(
+                    df_filtered, 
+                    x="metrics", 
+                    y="score", 
+                    color="sentiment", 
+                    color_discrete_map=COLOR_MAP, 
+                    hover_data=['text', 'author'], 
+                    size="metrics", 
+                    size_max=40,
+                    labels={"metrics": "Impact (Engagement)", "score": "Score de Sentiment (-1 à +1)"}
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            
+            # --- TABLEAU DE DONNÉES ---
+            st.subheader("Registre des Données")
+            disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']].copy()
+            st.dataframe(
+                disp, 
+                use_container_width=True, 
+                column_config={
+                    "metrics": st.column_config.NumberColumn("Impact", format="%d 👁️"),
+                    "score": st.column_config.ProgressColumn("Intensité", min_value=-1, max_value=1)
+                }
+            )
             
         else:
-            st.warning("Aucune donnée.")
+            st.warning("Aucune donnée pour ce filtre.")
     else:
         st.warning("Aucun résultat.")
