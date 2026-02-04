@@ -60,7 +60,7 @@ def analyze_local_advanced(text):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("Paramètres")
+    st.header("⚙️ Paramètres")
     source_mode = st.radio("Source", ["Twitter (X)", "YouTube", "Fusion (Twitter + YouTube)"])
     
     with st.form("search_form"):
@@ -69,18 +69,13 @@ with st.sidebar:
         query_exact = st.text_input("Phrase Exacte", placeholder="Ex: La direction a démissionné")
         query_any = st.text_input("Optionnels (OR)", placeholder="Ex: Urgent, Alerte")
         query_exclude = st.text_input("Exclusions (NOT)", placeholder="Ex: Sport, Concert")
-                # --- LANGUE (DÉPLACÉE ICI) ---
-        lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
         
         st.subheader("2. Période")
         d1, d2 = st.columns(2)
         date_start = d1.date_input("Début", datetime.now() - timedelta(days=7))
         date_end = d2.date_input("Fin", datetime.now())
 
-                st.subheader("4. Volume")
-        limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
-        
-        # Filtres Twitter (Sans la langue)
+        # Filtres Twitter
         if "Twitter" in source_mode:
             with st.expander("3. Filtres Avancés (Twitter)"):
                 from_accts = st.text_input("Auteur (@)")
@@ -94,6 +89,13 @@ with st.sidebar:
             from_accts, to_accts, mention_accts = "", "", ""
             min_faves, min_retweets = 0, 0
             links_filter, replies_filter = "Tous", "Tous"
+
+        st.subheader("4. Volume")
+        limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
+        
+        # --- LANGUE (PLACÉE EN DERNIER) ---
+        st.markdown("---") 
+        lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
         
         # BOUTON LANCER
         btn_start = st.form_submit_button("Lancer l'Analyse")
@@ -110,13 +112,13 @@ if btn_start:
         params_t = {
             "all_words": query_main, "exact_phrase": query_exact,
             "any_words": query_any, "none_words": query_exclude,
-            "lang": lang, # Utilisation de la variable déplacée
+            "lang": lang, 
             "from_accounts": from_accts, "to_accounts": to_accts,
             "mention_accounts": mention_accts, "min_faves": min_faves, "min_retweets": min_retweets,
             "links_filter": links_filter, "replies_filter": replies_filter,
             "since": date_start.strftime("%Y-%m-%d"), "until": date_end.strftime("%Y-%m-%d")
         }
-        status_t = st.status("Twitter...", expanded=True)
+        status_t = st.status("📡 Twitter...", expanded=True)
         for update in t_client.fetch_tweets_generator(params_t, limit):
             if "error" in update: st.error(update['error']); break
             status_t.update(label=f"Twitter : {update.get('count', 0)}")
@@ -133,7 +135,7 @@ if btn_start:
             final_data.extend(y_results)
             st.success(f"YouTube : {len(y_results)} vidéos")
 
-    # 3. ANALYSE
+    # 3. ANALYSE IA
     if final_data:
         df = pd.DataFrame(final_data)
         if 'metrics' not in df.columns: df['metrics'] = 0
@@ -157,8 +159,10 @@ if btn_start:
         
         st.divider()
 
-        # --- FILTRES & KPIs ---
-        st.markdown("### Contrôle")
+        # =========================================================
+        #  1. FILTRAGE & KPIs (EN HAUT DE LA PAGE)
+        # =========================================================
+        st.markdown("### 🔍 Contrôle & Synthèse")
         sel_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
         df_filtered = df[df['sentiment'].isin(sel_sentiments)]
 
@@ -172,7 +176,9 @@ if btn_start:
             
             st.divider()
 
-            # --- GRAPHIQUES (TOP & TREND) ---
+            # =========================================================
+            #  2. GRAPHIQUES STRATEGIQUES (Top Détracteurs & Solde)
+            # =========================================================
             c_detract, c_trend = st.columns(2)
 
             with c_detract:
@@ -184,7 +190,7 @@ if btn_start:
                     fig.update_layout(yaxis=dict(autorange="reversed"), height=350, title=None)
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.success("R.A.S")
+                    st.success("R.A.S (Aucun contenu négatif)")
 
             with c_trend:
                 st.subheader("Solde Net (4H)")
@@ -201,12 +207,14 @@ if btn_start:
                         fig = px.bar(agg, x="date", y="net", color="label", color_discrete_map=COLOR_MAP)
                         fig.update_layout(showlegend=False, height=350, bargap=0.2)
                         st.plotly_chart(fig, use_container_width=True)
-                    except: st.warning("Données insuffisantes")
-                else: st.info("Pas de données polarisées")
+                    except: st.warning("Données temporelles insuffisantes")
+                else: st.info("Pas assez de données pour le solde.")
 
             st.divider()
 
-            # --- GLOBAL VIZ ---
+            # =========================================================
+            #  3. GRAPHIQUES GLOBAUX (Répartition & Matrice)
+            # =========================================================
             g1, g2 = st.columns([1, 2])
             with g1:
                 st.subheader("Répartition")
@@ -220,11 +228,13 @@ if btn_start:
                                hover_data=['text', 'author'], size="metrics", size_max=50)
                 st.plotly_chart(fig, use_container_width=True)
             
-            # --- TABLEAU ---
+            # =========================================================
+            #  4. TABLEAU DE DONNÉES
+            # =========================================================
             st.subheader("Registre")
             disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']]
             st.dataframe(disp, use_container_width=True, 
-                         column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d 👁️"),
+                         column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d"),
                                         "score": st.column_config.ProgressColumn("Score", min_value=-1, max_value=1),
                                         "date": st.column_config.DatetimeColumn("Date", format="DD/MM HH:mm")})
             
@@ -232,5 +242,3 @@ if btn_start:
             st.warning("Aucune donnée pour ce filtre.")
     else:
         st.warning("Aucun résultat.")
-
-
