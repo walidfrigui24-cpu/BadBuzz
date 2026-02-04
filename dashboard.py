@@ -26,24 +26,18 @@ st.markdown("""
     .stButton>button { width: 100%; background-color: #0f1419; color: white; border-radius: 4px; font-weight: bold; }
     .stButton>button:hover { background-color: #272c30; }
     div[data-testid="metric-container"] { background-color: #f7f9f9; padding: 15px; border-radius: 5px; border: 1px solid #e1e8ed; }
-    .critic-card { background-color: #ffebee; padding: 10px; border-radius: 5px; border-left: 5px solid #e0245e; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
 COLOR_MAP = {'Positif': '#17bf63', 'Négatif': '#e0245e', 'Neutre': '#657786'}
 
-# --- 🧠 تحميل الموديل محلياً (The Brain) ---
+# --- 🧠 تحميل الموديل محلياً ---
 @st.cache_resource
 def load_local_model():
-    """
-    تحميل موديل XLM-RoBERTa المتخصص في تويتر (عربي/فرنسي/إنجليزي).
-    يعمل محلياً بدون إنترنت بعد التحميل الأول.
-    """
     model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
     sentiment_pipeline = pipeline("sentiment-analysis", model=model_name, tokenizer=model_name)
     return sentiment_pipeline
 
-# تحميل الموديل
 with st.spinner("جارٍ تحميل الدماغ الإلكتروني (AI Model)... يرجى الانتظار..."):
     try:
         ai_pipeline = load_local_model()
@@ -53,9 +47,7 @@ with st.spinner("جارٍ تحميل الدماغ الإلكتروني (AI Model
         ai_pipeline = None
 
 def analyze_local_advanced(text):
-    """تحليل النص باستخدام الموديل المحلي"""
     if not ai_pipeline: return 0.0, "Neutre"
-    
     try:
         safe_text = str(text)[:512]
         result = ai_pipeline(safe_text)[0]
@@ -65,7 +57,6 @@ def analyze_local_advanced(text):
         if label.lower() == 'positive': return score, "Positif"
         elif label.lower() == 'negative': return -score, "Négatif"
         else: return 0.0, "Neutre"
-        
     except Exception as e:
         return 0.0, "Neutre"
 
@@ -144,8 +135,6 @@ if btn_start:
         df = pd.DataFrame(final_data)
         if 'metrics' not in df.columns: df['metrics'] = 0
         df['metrics'] = pd.to_numeric(df['metrics'], errors='coerce').fillna(0).astype(int)
-        
-        # تحويل التاريخ للتأكد من عمل المبيان الزمني
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
         st.info(f"Analyse IA Locale en cours ({len(df)} éléments)...")
@@ -167,91 +156,97 @@ if btn_start:
         
         st.divider()
 
-        # ====================================================
-        #  SECTION STRATÉGIQUE (2 COLONNES)
-        # ====================================================
+        # =========================================================
+        #  1. FILTRAGE & KPIs (تم النقل للأعلى حسب الطلب) ⬆️
+        # =========================================================
+        st.markdown("### 🔍 Filtrage & KPIs")
         
-        col_detracteurs, col_trend = st.columns(2)
-
-        # --- GAUCHE: TOP DÉTRACTEURS ---
-        with col_detracteurs:
-            st.subheader("🚨 Top Auteurs Négatifs")
-            detractors_df = df[df['sentiment'] == 'Négatif'].copy()
-            
-            if not detractors_df.empty:
-                detractors_stats = detractors_df.groupby('author')[['metrics']].sum().reset_index()
-                detractors_stats = detractors_stats.sort_values(by='metrics', ascending=False).head(10)
-                
-                fig_detractors = px.bar(
-                    detractors_stats,
-                    x='metrics',
-                    y='author',
-                    orientation='h',
-                    text='metrics',
-                    color_discrete_sequence=['#e0245e'],
-                    labels={"metrics": "Impact", "author": ""}
-                )
-                fig_detractors.update_layout(yaxis=dict(autorange="reversed"), height=400)
-                st.plotly_chart(fig_detractors, use_container_width=True)
-            else:
-                st.success("Aucun détracteur majeur détecté.")
-
-        # --- DROITE: SOLDE NET 4H (LE GRAPHIQUE QUE TU VOULAIS) ---
-        with col_trend:
-            st.subheader("📉 Solde Net (Périodicité : 4H)")
-            
-            # On filtre pour ne garder que les données avec une date valide
-            df_trend = df.dropna(subset=['date']).copy()
-            df_polar = df_trend[df_trend['sentiment'] != 'Neutre']
-            
-            if not df_polar.empty:
-                # Groupement par 4 Heures et Sentiment
-                try:
-                    df_agg = df_polar.groupby([pd.Grouper(key='date', freq='4H'), 'sentiment']).size().unstack(fill_value=0)
-                    
-                    if 'Positif' not in df_agg.columns: df_agg['Positif'] = 0
-                    if 'Négatif' not in df_agg.columns: df_agg['Négatif'] = 0
-                    
-                    df_agg['net_score'] = df_agg['Positif'] - df_agg['Négatif']
-                    # Couleur conditionnelle (Vert si positif, Rouge si négatif)
-                    df_agg['trend_label'] = df_agg['net_score'].apply(lambda x: 'Positif' if x >= 0 else 'Négatif')
-                    df_agg = df_agg.reset_index()
-                    
-                    fig_trend = px.bar(
-                        df_agg, 
-                        x="date", 
-                        y="net_score", 
-                        color="trend_label", 
-                        color_discrete_map=COLOR_MAP,
-                        labels={"net_score": "Solde Net (Pos - Neg)", "date": "Temps"}
-                    )
-                    fig_trend.update_layout(showlegend=False, height=400, bargap=0.1)
-                    fig_trend.add_hline(y=0, line_color="white", opacity=0.5)
-                    st.plotly_chart(fig_trend, use_container_width=True)
-                except Exception as e:
-                    st.warning("Données temporelles insuffisantes pour le graphique 4H.")
-            else:
-                st.info("Pas assez de données polarisées pour afficher la tendance.")
-
-        # ====================================================
+        selected_sentiments = st.multiselect(
+            "Filtrer par Sentiment :", 
+            ["Positif", "Négatif", "Neutre"], 
+            default=["Positif", "Négatif", "Neutre"]
+        )
         
-        # B. FILTRAGE & VISUALISATION
-        st.divider()
-        st.markdown("### 🔍 Filtrage & Visualisation")
-        selected_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
+        # تطبيق الفلتر على البيانات
         df_filtered = df[df['sentiment'].isin(selected_sentiments)]
 
         if not df_filtered.empty:
-            # --- KPIs ---
+            # عرض المؤشرات (KPIs)
             c1, c2, c3 = st.columns(3)
             c1.metric("Volume Analysé", len(df_filtered))
-            c2.metric("Impact Total", f"{df_filtered['metrics'].sum():,}")
+            c2.metric("Impact Total (Engagement)", f"{df_filtered['metrics'].sum():,}")
             
             neg_vol = len(df_filtered[df_filtered['sentiment'] == 'Négatif'])
             neg_pct = round((neg_vol / len(df_filtered)) * 100, 1) if len(df_filtered) > 0 else 0
             c3.metric("Taux Négativité", f"{neg_pct}%", delta_color="inverse")
+            
+            st.divider()
 
-            # --- GRAPHIQUES ---
+            # =========================================================
+            #  2. GRAPHIQUES STRATÉGIQUES (ROW 1)
+            # =========================================================
+            col_detracteurs, col_trend = st.columns(2)
+
+            # --- A. TOP DÉTRACTEURS ---
+            with col_detracteurs:
+                st.subheader("🚨 Top Auteurs Négatifs")
+                # ملاحظة: نستخدم df_filtered لكي يستجيب المبيان للفلتر (إذا أزلت "Négatif" يختفي المبيان)
+                detractors_df = df_filtered[df_filtered['sentiment'] == 'Négatif'].copy()
+                
+                if not detractors_df.empty:
+                    detractors_stats = detractors_df.groupby('author')[['metrics']].sum().reset_index()
+                    detractors_stats = detractors_stats.sort_values(by='metrics', ascending=False).head(10)
+                    
+                    fig_detractors = px.bar(
+                        detractors_stats,
+                        x='metrics',
+                        y='author',
+                        orientation='h',
+                        text='metrics',
+                        color_discrete_sequence=['#e0245e'],
+                        labels={"metrics": "Impact", "author": ""}
+                    )
+                    fig_detractors.update_layout(yaxis=dict(autorange="reversed"), height=400)
+                    st.plotly_chart(fig_detractors, use_container_width=True)
+                else:
+                    st.success("Aucun auteur négatif dans la sélection actuelle.")
+
+            # --- B. SOLDE NET 4H ---
+            with col_trend:
+                st.subheader("📉 Solde Net (4H)")
+                df_trend = df_filtered.dropna(subset=['date']).copy()
+                df_polar = df_trend[df_trend['sentiment'] != 'Neutre']
+                
+                if not df_polar.empty:
+                    try:
+                        df_agg = df_polar.groupby([pd.Grouper(key='date', freq='4H'), 'sentiment']).size().unstack(fill_value=0)
+                        if 'Positif' not in df_agg.columns: df_agg['Positif'] = 0
+                        if 'Négatif' not in df_agg.columns: df_agg['Négatif'] = 0
+                        
+                        df_agg['net_score'] = df_agg['Positif'] - df_agg['Négatif']
+                        df_agg['trend_label'] = df_agg['net_score'].apply(lambda x: 'Positif' if x >= 0 else 'Négatif')
+                        df_agg = df_agg.reset_index()
+                        
+                        fig_trend = px.bar(
+                            df_agg, 
+                            x="date", 
+                            y="net_score", 
+                            color="trend_label", 
+                            color_discrete_map=COLOR_MAP,
+                            labels={"net_score": "Solde Net", "date": ""}
+                        )
+                        fig_trend.update_layout(showlegend=False, height=400, bargap=0.1)
+                        fig_trend.add_hline(y=0, line_color="white", opacity=0.5)
+                        st.plotly_chart(fig_trend, use_container_width=True)
+                    except:
+                        st.warning("Données temporelles insuffisantes.")
+                else:
+                    st.info("Pas assez de données polarisées.")
+
+            # =========================================================
+            #  3. ANALYSE GLOBALE (ROW 2)
+            # =========================================================
+            st.divider()
             g1, g2 = st.columns([1, 2])
             
             with g1:
@@ -260,7 +255,7 @@ if btn_start:
                 st.plotly_chart(fig_pie, use_container_width=True)
 
             with g2:
-                st.subheader("Impact vs Sentiment (Bubble Chart)")
+                st.subheader("Impact vs Sentiment")
                 fig_scatter = px.scatter(
                     df_filtered, 
                     x="metrics", 
@@ -270,12 +265,14 @@ if btn_start:
                     hover_data=['text', 'author'], 
                     size="metrics", 
                     size_max=40,
-                    labels={"metrics": "Impact (Engagement)", "score": "Sentiment (-1 à +1)"}
+                    labels={"metrics": "Impact", "score": "Sentiment"}
                 )
                 st.plotly_chart(fig_scatter, use_container_width=True)
             
-            # --- TABLEAU DE DONNÉES ---
-            st.subheader("Registre des Données")
+            # =========================================================
+            #  4. TABLEAU DE DONNÉES
+            # =========================================================
+            st.subheader("📋 Registre des Données")
             disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']].copy()
             st.dataframe(
                 disp, 
@@ -287,6 +284,6 @@ if btn_start:
             )
             
         else:
-            st.warning("Aucune donnée pour ce filtre.")
+            st.warning("Aucune donnée ne correspond aux filtres sélectionnés.")
     else:
-        st.warning("Aucun résultat.")
+        st.warning("Aucun résultat trouvé.")
