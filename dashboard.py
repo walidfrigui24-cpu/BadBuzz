@@ -26,7 +26,6 @@ st.markdown("""
     .stButton>button { width: 100%; background-color: #0f1419; color: white; border-radius: 4px; font-weight: bold; }
     .stButton>button:hover { background-color: #272c30; }
     div[data-testid="metric-container"] { background-color: #f7f9f9; padding: 15px; border-radius: 5px; border: 1px solid #e1e8ed; }
-    .critic-card { background-color: #ffebee; padding: 10px; border-radius: 5px; border-left: 5px solid #e0245e; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -47,7 +46,7 @@ def load_local_model():
 with st.spinner("جارٍ تحميل الدماغ الإلكتروني (AI Model)... يرجى الانتظار..."):
     try:
         ai_pipeline = load_local_model()
-        st.sidebar.success("AI Model Loaded (Local)")
+        st.sidebar.success("✅ AI Model Loaded (Local)")
     except Exception as e:
         st.error(f"فشل تحميل الموديل: {e}")
         ai_pipeline = None
@@ -103,7 +102,7 @@ with st.sidebar:
 
         st.subheader("4. Volume")
         limit = st.number_input("Limite", 10, 5000, 100, step=50)
-        btn_start = st.form_submit_button("Lancer")
+        btn_start = st.form_submit_button("🚀 Lancer")
 
 # --- DASHBOARD ---
 st.title("🛡️ War Room (Local Advanced AI)")
@@ -164,22 +163,39 @@ if btn_start:
         
         st.divider()
 
-        # A. TOP DÉTRACTEURS
-        st.subheader("🚨 Top Détracteurs (Impact)")
-        detractors = df[df['sentiment'] == 'Négatif'].sort_values(by='metrics', ascending=False).head(4)
-        if not detractors.empty:
-            cols = st.columns(len(detractors))
-            for i, (_, row) in enumerate(detractors.iterrows()):
-                with cols[i]:
-                    st.markdown(f"""
-                    <div class="critic-card">
-                        <b>@{row['author']}</b><br>Impact: {row['metrics']}<br><small>{str(row['text'])[:50]}...</small>
-                    </div>
-                    """, unsafe_allow_html=True)
+        # A. TOP DÉTRACTEURS (VUE GRAPHIQUE BAR CHART)
+        st.subheader("🚨 Top Auteurs Négatifs (Détracteurs)")
+        
+        # 1. Filtrer les négatifs
+        detractors_df = df[df['sentiment'] == 'Négatif'].copy()
+        
+        if not detractors_df.empty:
+            # 2. Grouper par auteur et sommer l'impact (metrics)
+            detractors_stats = detractors_df.groupby('author')[['metrics']].sum().reset_index()
+            # 3. Trier pour avoir les plus gros en premier
+            detractors_stats = detractors_stats.sort_values(by='metrics', ascending=False).head(10)
+            
+            # 4. Créer le graphique (Horizontal Bar)
+            fig_detractors = px.bar(
+                detractors_stats,
+                x='metrics',
+                y='author',
+                orientation='h', # Horizontal
+                title="Top 10 Détracteurs par Impact",
+                text='metrics', # Afficher la valeur sur la barre
+                color_discrete_sequence=['#e0245e'], # Couleur rouge Twitter
+                labels={"metrics": "Impact (Likes + RTs)", "author": "Auteur"}
+            )
+            
+            # Inverser l'axe Y pour avoir le 1er en haut
+            fig_detractors.update_layout(yaxis=dict(autorange="reversed"))
+            
+            st.plotly_chart(fig_detractors, use_container_width=True)
+            
         else:
-            st.success("R.A.S")
+            st.success("Aucun détracteur majeur détecté (Pas de contenu négatif).")
 
-        # B. FILTRAGE
+        # B. FILTRAGE & VISUALISATION
         st.divider()
         st.markdown("### 🔍 Filtrage & Visualisation")
         selected_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
@@ -195,7 +211,7 @@ if btn_start:
             neg_pct = round((neg_vol / len(df_filtered)) * 100, 1)
             c3.metric("Taux Négativité", f"{neg_pct}%", delta_color="inverse")
 
-            # --- GRAPHIQUES (Mise à jour demandée) ---
+            # --- GRAPHIQUES ---
             g1, g2 = st.columns([1, 2])
             
             with g1:
@@ -206,10 +222,7 @@ if btn_start:
 
             with g2:
                 st.subheader("Impact vs Sentiment")
-                # Scatter Plot (Bubble Chart) - المخطط الذي طلبته
-                # المحور السيني: Engagement (Metrics)
-                # المحور الصادي: Sentiment Score
-                # حجم الدائرة: Engagement
+                # Scatter Plot (Bubble Chart)
                 fig_scatter = px.scatter(
                     df_filtered, 
                     x="metrics", 
@@ -219,12 +232,12 @@ if btn_start:
                     hover_data=['text', 'author'], 
                     size="metrics", 
                     size_max=40,
-                    labels={"metrics": "Impact (Engagement)", "score": "Score de Sentiment (-1 à +1)"}
+                    labels={"metrics": "Impact (Engagement)", "score": "Sentiment (-1 à +1)"}
                 )
                 st.plotly_chart(fig_scatter, use_container_width=True)
             
             # --- TABLEAU DE DONNÉES ---
-            st.subheader("Registre des Données")
+            st.subheader("📋 Registre des Données")
             disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']].copy()
             st.dataframe(
                 disp, 
