@@ -94,7 +94,7 @@ with st.sidebar:
         st.subheader("4. Volume")
         limit = st.number_input("Limite", 10, 5000, 100, step=50)
         
-        btn_start = st.form_submit_button("🚀 Lancer l'Analyse")
+        btn_start = st.form_submit_button("Lancer l'Analyse")
 
 # --- DASHBOARD ---
 st.title("🛡️ War Room Analytics (Local Core)")
@@ -158,7 +158,7 @@ if btn_start:
         st.divider()
 
         # TOP DÉTRACTEURS
-        st.subheader("🚨 Top Détracteurs (Impact)")
+        st.subheader("Top Détracteurs (Impact)")
         detractors = df[df['sentiment'] == 'Négatif'].sort_values(by='metrics', ascending=False).head(4)
         if not detractors.empty:
             cols = st.columns(len(detractors))
@@ -198,3 +198,4 @@ if btn_start:
             st.warning("Aucune donnée.")
     else:
         st.warning("Aucun résultat.")
+
