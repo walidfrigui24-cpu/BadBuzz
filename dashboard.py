@@ -26,6 +26,7 @@ st.markdown("""
     .stButton>button { width: 100%; background-color: #0f1419; color: white; border-radius: 4px; font-weight: bold; }
     .stButton>button:hover { background-color: #272c30; }
     div[data-testid="metric-container"] { background-color: #f7f9f9; padding: 15px; border-radius: 5px; border: 1px solid #e1e8ed; }
+    .critic-card { background-color: #ffebee; padding: 10px; border-radius: 5px; border-left: 5px solid #e0245e; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -143,6 +144,9 @@ if btn_start:
         df = pd.DataFrame(final_data)
         if 'metrics' not in df.columns: df['metrics'] = 0
         df['metrics'] = pd.to_numeric(df['metrics'], errors='coerce').fillna(0).astype(int)
+        
+        # تحويل التاريخ للتأكد من عمل المبيان الزمني
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
         st.info(f"Analyse IA Locale en cours ({len(df)} éléments)...")
         
@@ -163,38 +167,74 @@ if btn_start:
         
         st.divider()
 
-        # A. TOP DÉTRACTEURS (VUE GRAPHIQUE BAR CHART)
-        st.subheader("🚨 Top Auteurs Négatifs (Détracteurs)")
+        # ====================================================
+        #  SECTION STRATÉGIQUE (2 COLONNES)
+        # ====================================================
         
-        # 1. Filtrer les négatifs
-        detractors_df = df[df['sentiment'] == 'Négatif'].copy()
-        
-        if not detractors_df.empty:
-            # 2. Grouper par auteur et sommer l'impact (metrics)
-            detractors_stats = detractors_df.groupby('author')[['metrics']].sum().reset_index()
-            # 3. Trier pour avoir les plus gros en premier
-            detractors_stats = detractors_stats.sort_values(by='metrics', ascending=False).head(10)
-            
-            # 4. Créer le graphique (Horizontal Bar)
-            fig_detractors = px.bar(
-                detractors_stats,
-                x='metrics',
-                y='author',
-                orientation='h', # Horizontal
-                title="Top 10 Détracteurs par Impact",
-                text='metrics', # Afficher la valeur sur la barre
-                color_discrete_sequence=['#e0245e'], # Couleur rouge Twitter
-                labels={"metrics": "Impact (Likes + RTs)", "author": "Auteur"}
-            )
-            
-            # Inverser l'axe Y pour avoir le 1er en haut
-            fig_detractors.update_layout(yaxis=dict(autorange="reversed"))
-            
-            st.plotly_chart(fig_detractors, use_container_width=True)
-            
-        else:
-            st.success("Aucun détracteur majeur détecté (Pas de contenu négatif).")
+        col_detracteurs, col_trend = st.columns(2)
 
+        # --- GAUCHE: TOP DÉTRACTEURS ---
+        with col_detracteurs:
+            st.subheader("🚨 Top Auteurs Négatifs")
+            detractors_df = df[df['sentiment'] == 'Négatif'].copy()
+            
+            if not detractors_df.empty:
+                detractors_stats = detractors_df.groupby('author')[['metrics']].sum().reset_index()
+                detractors_stats = detractors_stats.sort_values(by='metrics', ascending=False).head(10)
+                
+                fig_detractors = px.bar(
+                    detractors_stats,
+                    x='metrics',
+                    y='author',
+                    orientation='h',
+                    text='metrics',
+                    color_discrete_sequence=['#e0245e'],
+                    labels={"metrics": "Impact", "author": ""}
+                )
+                fig_detractors.update_layout(yaxis=dict(autorange="reversed"), height=400)
+                st.plotly_chart(fig_detractors, use_container_width=True)
+            else:
+                st.success("Aucun détracteur majeur détecté.")
+
+        # --- DROITE: SOLDE NET 4H (LE GRAPHIQUE QUE TU VOULAIS) ---
+        with col_trend:
+            st.subheader("📉 Solde Net (Périodicité : 4H)")
+            
+            # On filtre pour ne garder que les données avec une date valide
+            df_trend = df.dropna(subset=['date']).copy()
+            df_polar = df_trend[df_trend['sentiment'] != 'Neutre']
+            
+            if not df_polar.empty:
+                # Groupement par 4 Heures et Sentiment
+                try:
+                    df_agg = df_polar.groupby([pd.Grouper(key='date', freq='4H'), 'sentiment']).size().unstack(fill_value=0)
+                    
+                    if 'Positif' not in df_agg.columns: df_agg['Positif'] = 0
+                    if 'Négatif' not in df_agg.columns: df_agg['Négatif'] = 0
+                    
+                    df_agg['net_score'] = df_agg['Positif'] - df_agg['Négatif']
+                    # Couleur conditionnelle (Vert si positif, Rouge si négatif)
+                    df_agg['trend_label'] = df_agg['net_score'].apply(lambda x: 'Positif' if x >= 0 else 'Négatif')
+                    df_agg = df_agg.reset_index()
+                    
+                    fig_trend = px.bar(
+                        df_agg, 
+                        x="date", 
+                        y="net_score", 
+                        color="trend_label", 
+                        color_discrete_map=COLOR_MAP,
+                        labels={"net_score": "Solde Net (Pos - Neg)", "date": "Temps"}
+                    )
+                    fig_trend.update_layout(showlegend=False, height=400, bargap=0.1)
+                    fig_trend.add_hline(y=0, line_color="white", opacity=0.5)
+                    st.plotly_chart(fig_trend, use_container_width=True)
+                except Exception as e:
+                    st.warning("Données temporelles insuffisantes pour le graphique 4H.")
+            else:
+                st.info("Pas assez de données polarisées pour afficher la tendance.")
+
+        # ====================================================
+        
         # B. FILTRAGE & VISUALISATION
         st.divider()
         st.markdown("### 🔍 Filtrage & Visualisation")
@@ -205,24 +245,22 @@ if btn_start:
             # --- KPIs ---
             c1, c2, c3 = st.columns(3)
             c1.metric("Volume Analysé", len(df_filtered))
-            c2.metric("Impact Total (Engagement)", f"{df_filtered['metrics'].sum():,}")
+            c2.metric("Impact Total", f"{df_filtered['metrics'].sum():,}")
             
             neg_vol = len(df_filtered[df_filtered['sentiment'] == 'Négatif'])
-            neg_pct = round((neg_vol / len(df_filtered)) * 100, 1)
+            neg_pct = round((neg_vol / len(df_filtered)) * 100, 1) if len(df_filtered) > 0 else 0
             c3.metric("Taux Négativité", f"{neg_pct}%", delta_color="inverse")
 
             # --- GRAPHIQUES ---
             g1, g2 = st.columns([1, 2])
             
             with g1:
-                st.subheader("Répartition des Avis")
-                # Pie Chart
+                st.subheader("Répartition")
                 fig_pie = px.pie(df_filtered, names='sentiment', color='sentiment', color_discrete_map=COLOR_MAP)
                 st.plotly_chart(fig_pie, use_container_width=True)
 
             with g2:
-                st.subheader("Impact vs Sentiment")
-                # Scatter Plot (Bubble Chart)
+                st.subheader("Impact vs Sentiment (Bubble Chart)")
                 fig_scatter = px.scatter(
                     df_filtered, 
                     x="metrics", 
