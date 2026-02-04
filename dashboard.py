@@ -1,7 +1,7 @@
 import sys
 import asyncio
 
-# Correctif Windows
+# إصلاح مشكلة ويندوز
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -11,17 +11,15 @@ import plotly.express as px
 import nest_asyncio
 from datetime import datetime, timedelta
 
-# المكتبة المحلية للتحليل
-from textblob import TextBlob 
+# استيراد مكتبات الذكاء الاصطناعي المحلية
+from transformers import pipeline
 
-# Importation des clients
 from api_client import TwitterAPIClient
 from youtube_client import YouTubeClient
 
 nest_asyncio.apply()
 
-# --- CONFIGURATION PAGE ---
-st.set_page_config(page_title="War Room Analytics (Local)", layout="wide")
+st.set_page_config(page_title="War Room (Local AI Core)", layout="wide")
 
 st.markdown("""
 <style>
@@ -34,34 +32,54 @@ st.markdown("""
 
 COLOR_MAP = {'Positif': '#17bf63', 'Négatif': '#e0245e', 'Neutre': '#657786'}
 
-# --- FONCTION D'ANALYSE LOCALE (TEXTBLOB) ---
-def analyze_local_sentiment(text):
+# --- 🧠 تحميل الموديل محلياً (The Brain) ---
+# نستخدم @st.cache_resource لكي يتم تحميل الموديل مرة واحدة فقط عند تشغيل البرنامج
+# الموديل يتم تخزينه في الرام ولا يعاد تحميله مع كل ضغطة زر
+
+@st.cache_resource
+def load_local_model():
     """
-    Analyse ultra-rapide utilisant le CPU local (TextBlob).
-    Pas d'API, pas d'attente.
+    تحميل موديل XLM-RoBERTa المتخصص في تويتر (عربي/فرنسي/إنجليزي).
+    يعمل محلياً بدون إنترنت بعد التحميل الأول.
     """
-    if not isinstance(text, str): return 0.0, "Neutre"
+    model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+    # تحميل البايبلاين (المحرك)
+    sentiment_pipeline = pipeline("sentiment-analysis", model=model_name, tokenizer=model_name)
+    return sentiment_pipeline
+
+# تحميل الموديل الآن (سيظهر سبينر في البداية فقط)
+with st.spinner("جارٍ تحميل الدماغ الإلكتروني (AI Model) إلى الذاكرة... يرجى الانتظار دقيقة..."):
+    try:
+        ai_pipeline = load_local_model()
+        st.sidebar.success("✅ AI Model Loaded (Local)")
+    except Exception as e:
+        st.error(f"فشل تحميل الموديل: {e}")
+        ai_pipeline = None
+
+def analyze_local_advanced(text):
+    """تحليل النص باستخدام الموديل المحلي"""
+    if not ai_pipeline: return 0.0, "Neutre"
     
-    # Création de l'objet TextBlob
-    blob = TextBlob(text)
-    
-    # Calcul de la polarité (-1 à +1)
-    # Note: TextBlob est natif anglais. Pour le français/arabe, c'est approximatif 
-    # mais suffisant pour une vue d'ensemble rapide.
-    polarity = blob.sentiment.polarity
-    
-    # Classification
-    if polarity > 0.05:
-        return polarity, "Positif"
-    elif polarity < -0.05:
-        return polarity, "Négatif"
-    else:
-        return polarity, "Neutre"
+    try:
+        # قص النص لتجنب خطأ الطول (512 حرف)
+        safe_text = str(text)[:512]
+        
+        # التنبؤ
+        result = ai_pipeline(safe_text)[0]
+        label = result['label'] # Positive, Negative, Neutral
+        score = result['score']
+        
+        # توحيد التسميات
+        if label.lower() == 'positive': return score, "Positif"
+        elif label.lower() == 'negative': return -score, "Négatif"
+        else: return 0.0, "Neutre"
+        
+    except Exception as e:
+        return 0.0, "Neutre"
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("Paramètres (Local Mode ⚡)")
-    
+    st.header("Paramètres (Local AI)")
     source_mode = st.radio("Source", ["Twitter (X)", "YouTube", "Fusion (Twitter + YouTube)"])
     
     with st.form("search_form"):
@@ -93,11 +111,10 @@ with st.sidebar:
 
         st.subheader("4. Volume")
         limit = st.number_input("Limite", 10, 5000, 100, step=50)
-        
-        btn_start = st.form_submit_button("Lancer l'Analyse")
+        btn_start = st.form_submit_button("🚀 Lancer")
 
 # --- DASHBOARD ---
-st.title("🛡️ War Room Analytics (Local Core)")
+st.title("🛡️ War Room (Local Advanced AI)")
 
 if btn_start:
     final_data = []
@@ -119,7 +136,7 @@ if btn_start:
             status_t.update(label=f"Twitter: {update.get('count', 0)} tweets")
             if update.get('finished'):
                 final_data.extend(update['data'])
-                status_t.update(label="Twitter Terminé", state="complete")
+                status_t.update(label="Twitter OK", state="complete")
 
     # 2. YOUTUBE
     if "YouTube" in source_mode:
@@ -130,35 +147,35 @@ if btn_start:
             final_data.extend(y_results)
             st.success(f"YouTube: {len(y_results)} vidéos")
 
-    # 3. ANALYSE LOCALE (INSTANTANÉE)
+    # 3. ANALYSE LOCALE AVANCÉE
     if final_data:
         df = pd.DataFrame(final_data)
         if 'metrics' not in df.columns: df['metrics'] = 0
         df['metrics'] = pd.to_numeric(df['metrics'], errors='coerce').fillna(0).astype(int)
 
-        st.info(f"Analyse Locale Rapide ({len(df)} éléments)...")
+        st.info(f"Analyse IA Locale en cours ({len(df)} éléments)...")
         
-        # --- BOUCLE RAPIDE LOCALE ---
+        # الشريط التقدمي
         scores = []
         sentiments = []
         progress_bar = st.progress(0)
         
         for i, text in enumerate(df['text']):
-            s, l = analyze_local_sentiment(str(text))
+            # استدعاء الموديل المحلي
+            s, l = analyze_local_advanced(str(text))
             scores.append(s)
             sentiments.append(l)
-            if i % 50 == 0: progress_bar.progress((i + 1) / len(df))
+            if i % 10 == 0: progress_bar.progress((i + 1) / len(df))
             
         progress_bar.empty()
-        # -----------------------------
         
         df['score'] = scores
         df['sentiment'] = sentiments
         
         st.divider()
 
-        # TOP DÉTRACTEURS
-        st.subheader("Top Détracteurs (Impact)")
+        # A. TOP DÉTRACTEURS
+        st.subheader("🚨 Top Détracteurs (Impact)")
         detractors = df[df['sentiment'] == 'Négatif'].sort_values(by='metrics', ascending=False).head(4)
         if not detractors.empty:
             cols = st.columns(len(detractors))
@@ -172,7 +189,7 @@ if btn_start:
         else:
             st.success("R.A.S")
 
-        # FILTRAGE
+        # B. FILTRAGE
         st.markdown("### 🔍 Filtrage")
         selected_sentiments = st.multiselect("Filtre :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
         df_filtered = df[df['sentiment'].isin(selected_sentiments)]
@@ -198,4 +215,3 @@ if btn_start:
             st.warning("Aucune donnée.")
     else:
         st.warning("Aucun résultat.")
-
