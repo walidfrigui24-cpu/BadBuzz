@@ -39,7 +39,7 @@ def load_local_model():
 with st.spinner("Chargement IA..."):
     try:
         ai_pipeline = load_local_model()
-        st.sidebar.success("IA Prête")
+        st.sidebar.success("✅ IA Prête")
     except:
         st.sidebar.error("Erreur IA")
         ai_pipeline = None
@@ -93,12 +93,12 @@ with st.sidebar:
         st.subheader("4. Volume")
         limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
         
-        # --- LANGUE (EN BAS) ---
+        # --- LANGUE ---
         st.markdown("---") 
         lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
         
         # BOUTON LANCER
-        btn_start = st.form_submit_button("Lancer l'Analyse")
+        btn_start = st.form_submit_button("🚀 Lancer l'Analyse")
 
 # --- DASHBOARD ---
 st.title("🛡️ War Room : Tableau de Bord")
@@ -118,19 +118,19 @@ if btn_start:
             "links_filter": links_filter, "replies_filter": replies_filter,
             "since": date_start.strftime("%Y-%m-%d"), "until": date_end.strftime("%Y-%m-%d")
         }
-        status_t = st.status("Twitter...", expanded=True)
+        status_t = st.status("📡 Twitter...", expanded=True)
         for update in t_client.fetch_tweets_generator(params_t, limit):
             if "error" in update: st.error(update['error']); break
             status_t.update(label=f"Twitter : {update.get('count', 0)}")
             if update.get('finished'):
                 final_data.extend(update['data'])
-                status_t.update(label="Twitter OK", state="complete")
+                status_t.update(label="✅ Twitter OK", state="complete")
 
     # 2. YOUTUBE
     if "YouTube" in source_mode:
         y_client = YouTubeClient()
         y_query = f"{query_main} {query_exact} {query_any}".strip() or "Actualités"
-        with st.spinner("YouTube..."):
+        with st.spinner("🎥 YouTube..."):
             y_results = y_client.search_videos(y_query, limit=limit)
             final_data.extend(y_results)
             st.success(f"YouTube : {len(y_results)} vidéos")
@@ -140,9 +140,15 @@ if btn_start:
         df = pd.DataFrame(final_data)
         if 'metrics' not in df.columns: df['metrics'] = 0
         df['metrics'] = pd.to_numeric(df['metrics'], errors='coerce').fillna(0).astype(int)
-        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        
+        # --- FIX: GESTION ROBUSTE DES DATES ---
+        # 1. Conversion en Datetime (UTC)
+        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True)
+        # 2. Suppression de la Timezone pour permettre la comparaison avec date_input
+        df['date'] = df['date'].dt.tz_localize(None)
+        # --------------------------------------
 
-        st.info(f"Analyse IA en cours ({len(df)} éléments)...")
+        st.info(f"🧠 Analyse IA en cours ({len(df)} éléments)...")
         
         scores, sentiments = [], []
         prog = st.progress(0)
@@ -178,7 +184,7 @@ if btn_start:
             c_detract, c_trend = st.columns(2)
 
             with c_detract:
-                st.subheader("Top Détracteurs")
+                st.subheader("🚨 Top Détracteurs")
                 detr_df = df_filtered[df_filtered['sentiment'] == 'Négatif']
                 if not detr_df.empty:
                     stats = detr_df.groupby('author')[['metrics']].sum().reset_index().sort_values('metrics', ascending=False).head(10)
@@ -189,15 +195,15 @@ if btn_start:
                     st.success("R.A.S")
 
             with c_trend:
-                st.subheader("Solde Net (4H)")
+                st.subheader("📉 Solde Net (4H)")
                 df_tr = df_filtered.dropna(subset=['date'])
                 
-                # --- PATCH: FILTRE STRICT SUR LES DATES ---
-                # On force le retrait de tout ce qui dépasse date_start ou date_end
-                # pour éviter l'affichage de données parasites dans le graphique temporel
+                # --- FIX: FILTRE STRICT SUR LES DATES ---
+                # Maintenant que les dates sont nettoyées (tz_localize(None)), 
+                # la comparaison avec pd.Timestamp fonctionnera sans erreur.
                 mask_date = (df_tr['date'] >= pd.Timestamp(date_start)) & (df_tr['date'] <= pd.Timestamp(date_end) + pd.Timedelta(days=1))
                 df_tr = df_tr[mask_date]
-                # ------------------------------------------
+                # ----------------------------------------
 
                 df_pol = df_tr[df_tr['sentiment'] != 'Neutre']
                 if not df_pol.empty:
@@ -219,22 +225,22 @@ if btn_start:
             # --- GLOBAL VIZ ---
             g1, g2 = st.columns([1, 2])
             with g1:
-                st.subheader("Répartition")
+                st.subheader("📊 Répartition")
                 fig = px.pie(df_filtered, names='sentiment', color='sentiment', color_discrete_map=COLOR_MAP, hole=0.4)
                 fig.update_traces(textinfo='percent+label')
                 st.plotly_chart(fig, use_container_width=True)
 
             with g2:
-                st.subheader("Matrice Impact")
+                st.subheader("🔥 Matrice Impact")
                 fig = px.scatter(df_filtered, x="metrics", y="score", color="sentiment", color_discrete_map=COLOR_MAP, 
                                hover_data=['text', 'author'], size="metrics", size_max=50)
                 st.plotly_chart(fig, use_container_width=True)
             
             # --- TABLEAU ---
-            st.subheader("Registre")
+            st.subheader("📋 Registre")
             disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']]
             st.dataframe(disp, use_container_width=True, 
-                         column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d"),
+                         column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d 👁️"),
                                         "score": st.column_config.ProgressColumn("Score", min_value=-1, max_value=1),
                                         "date": st.column_config.DatetimeColumn("Date", format="DD/MM HH:mm")})
             
