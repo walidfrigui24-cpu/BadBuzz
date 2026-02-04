@@ -275,7 +275,7 @@ if btn_start:
                 st.plotly_chart(fig_scatter, use_container_width=True)
             
             # --- TABLEAU DE DONNÉES ---
-            st.subheader("📋 Registre des Données")
+            st.subheader("Registre des Données")
             disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']].copy()
             st.dataframe(
                 disp, 
