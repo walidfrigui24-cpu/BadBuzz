@@ -118,7 +118,7 @@ if btn_start:
             "links_filter": links_filter, "replies_filter": replies_filter,
             "since": date_start.strftime("%Y-%m-%d"), "until": date_end.strftime("%Y-%m-%d")
         }
-        status_t = st.status("📡 Twitter...", expanded=True)
+        status_t = st.status("Twitter...", expanded=True)
         for update in t_client.fetch_tweets_generator(params_t, limit):
             if "error" in update: st.error(update['error']); break
             status_t.update(label=f"Twitter : {update.get('count', 0)}")
@@ -247,7 +247,7 @@ if not st.session_state['df_main'].empty:
         st.subheader("Registre")
         disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']]
         st.dataframe(disp, use_container_width=True, 
-                        column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d 👁️"),
+                        column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d"),
                                     "score": st.column_config.ProgressColumn("Score", min_value=-1, max_value=1),
                                     "date": st.column_config.DatetimeColumn("Date", format="DD/MM HH:mm")})
         
@@ -255,4 +255,5 @@ if not st.session_state['df_main'].empty:
         st.warning("Aucune donnée pour ce filtre.")
 else:
     if not btn_start:
-        st.info("👋 Bienvenue dans la War Room. Configurez les paramètres à gauche et cliquez sur 'Lancer'.")
+        st.info("Bienvenue dans la War Room. Configurez les paramètres à gauche et cliquez sur 'Lancer'.")
+
