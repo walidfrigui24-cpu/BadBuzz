@@ -32,6 +32,7 @@ COLOR_MAP = {'Positif': '#17bf63', 'Négatif': '#e0245e', 'Neutre': '#657786'}
 # --- CHARGEMENT MODELE (CACHE) ---
 @st.cache_resource
 def load_local_model():
+    # Modèle XLM-RoBERTa (Multi-langues)
     model_name = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
     return pipeline("sentiment-analysis", model=model_name, tokenizer=model_name)
 
@@ -59,7 +60,7 @@ def analyze_local_advanced(text):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("Paramètres")
+    st.header("⚙️ Paramètres")
     source_mode = st.radio("Source", ["Twitter (X)", "YouTube", "Fusion (Twitter + YouTube)"])
     
     with st.form("search_form"):
@@ -71,10 +72,10 @@ with st.sidebar:
         
         st.subheader("2. Période")
         d1, d2 = st.columns(2)
-        # جعلنا التاريخ الافتراضي ديناميكياً لتجنب مشكلة التاريخ القديم
         date_start = d1.date_input("Début", datetime.now() - timedelta(days=7))
         date_end = d2.date_input("Fin", datetime.now())
 
+        # Filtres Twitter
         if "Twitter" in source_mode:
             with st.expander("3. Filtres Avancés (Twitter)"):
                 from_accts = st.text_input("Auteur (@)")
@@ -92,22 +93,20 @@ with st.sidebar:
         st.subheader("4. Volume")
         limit = st.number_input("Limite (Max)", 10, 5000, 100, step=50)
         
+        # --- LANGUE (EN BAS) ---
         st.markdown("---") 
         lang = st.selectbox("Langue Cible", ["Tout", "fr", "en", "ar"], index=1)
         
+        # BOUTON LANCER
         btn_start = st.form_submit_button("Lancer l'Analyse")
 
-# --- DASHBOARD LOGIC ---
+# --- DASHBOARD ---
 st.title("🛡️ War Room : Tableau de Bord")
 
-# تهيئة Session State لحفظ البيانات
-if 'df_main' not in st.session_state:
-    st.session_state['df_main'] = pd.DataFrame()
-
-# عند الضغط على الزر، نقوم بالجلب والحفظ في الذاكرة
 if btn_start:
     final_data = []
     
+    # 1. TWITTER
     if "Twitter" in source_mode:
         t_client = TwitterAPIClient()
         params_t = {
@@ -127,6 +126,7 @@ if btn_start:
                 final_data.extend(update['data'])
                 status_t.update(label="Twitter OK", state="complete")
 
+    # 2. YOUTUBE
     if "YouTube" in source_mode:
         y_client = YouTubeClient()
         y_query = f"{query_main} {query_exact} {query_any}".strip() or "Actualités"
@@ -135,14 +135,12 @@ if btn_start:
             final_data.extend(y_results)
             st.success(f"YouTube : {len(y_results)} vidéos")
 
+    # 3. ANALYSE IA
     if final_data:
         df = pd.DataFrame(final_data)
         if 'metrics' not in df.columns: df['metrics'] = 0
         df['metrics'] = pd.to_numeric(df['metrics'], errors='coerce').fillna(0).astype(int)
-        
-        # تصحيح التواريخ
-        df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True)
-        df['date'] = df['date'].dt.tz_localize(None)
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
         st.info(f"Analyse IA en cours ({len(df)} éléments)...")
         
@@ -159,93 +157,88 @@ if btn_start:
         df['score'] = scores
         df['sentiment'] = sentiments
         
-        # حفظ البيانات في الذاكرة الدائمة للجلسة
-        st.session_state['df_main'] = df
-        st.rerun() # إعادة تحميل الصفحة لعرض البيانات المحفوظة
-
-# --- عرض البيانات من الذاكرة (خارج شرط الزر) ---
-if not st.session_state['df_main'].empty:
-    df = st.session_state['df_main']
-    
-    st.divider()
-
-    st.markdown("### Contrôle")
-    sel_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
-    df_filtered = df[df['sentiment'].isin(sel_sentiments)]
-
-    if not df_filtered.empty:
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Volume", f"{len(df_filtered)}")
-        k2.metric("Impact (Eng.)", f"{df_filtered['metrics'].sum():,}")
-        neg_vol = len(df_filtered[df_filtered['sentiment'] == 'Négatif'])
-        neg_pct = round((neg_vol / len(df_filtered)) * 100, 1) if len(df_filtered) > 0 else 0
-        k3.metric("Négativité", f"{neg_pct}%", delta_color="inverse")
-        
         st.divider()
 
-        c_detract, c_trend = st.columns(2)
+        # --- FILTRES & KPIs ---
+        st.markdown("### 🔍 Contrôle")
+        sel_sentiments = st.multiselect("Filtre Sentiment :", ["Positif", "Négatif", "Neutre"], default=["Positif", "Négatif", "Neutre"])
+        df_filtered = df[df['sentiment'].isin(sel_sentiments)]
 
-        with c_detract:
-            st.subheader("Top Détracteurs")
-            detr_df = df_filtered[df_filtered['sentiment'] == 'Négatif']
-            if not detr_df.empty:
-                stats = detr_df.groupby('author')[['metrics']].sum().reset_index().sort_values('metrics', ascending=False).head(10)
-                fig = px.bar(stats, x='metrics', y='author', orientation='h', text='metrics', color_discrete_sequence=['#e0245e'])
-                fig.update_layout(yaxis=dict(autorange="reversed"), height=350, title=None)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.success("R.A.S")
-
-        with c_trend:
-            st.subheader("📉 Solde Net (4H)")
-            df_tr = df_filtered.dropna(subset=['date'])
+        if not df_filtered.empty:
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Volume", f"{len(df_filtered)}")
+            k2.metric("Impact (Eng.)", f"{df_filtered['metrics'].sum():,}")
+            neg_vol = len(df_filtered[df_filtered['sentiment'] == 'Négatif'])
+            neg_pct = round((neg_vol / len(df_filtered)) * 100, 1) if len(df_filtered) > 0 else 0
+            k3.metric("Négativité", f"{neg_pct}%", delta_color="inverse")
             
-            # --- الفلتر الصارم (مهم جداً التأكد من تواريخ القائمة الجانبية) ---
-            # نستخدم التواريخ المختارة حالياً في القائمة الجانبية حتى لو كانت البيانات قديمة في الذاكرة
-            mask_date = (df_tr['date'] >= pd.Timestamp(date_start)) & (df_tr['date'] <= pd.Timestamp(date_end) + pd.Timedelta(days=1))
-            df_tr = df_tr[mask_date]
+            st.divider()
 
-            df_pol = df_tr[df_tr['sentiment'] != 'Neutre']
-            if not df_pol.empty:
-                try:
-                    agg = df_pol.groupby([pd.Grouper(key='date', freq='4H'), 'sentiment']).size().unstack(fill_value=0)
-                    if 'Positif' not in agg: agg['Positif'] = 0
-                    if 'Négatif' not in agg: agg['Négatif'] = 0
-                    agg['net'] = agg['Positif'] - agg['Négatif']
-                    agg['label'] = agg['net'].apply(lambda x: 'Positif' if x >= 0 else 'Négatif')
-                    agg = agg.reset_index()
-                    
-                    fig = px.bar(agg, x="date", y="net", color="label", color_discrete_map=COLOR_MAP)
-                    fig.update_traces(width=14400000) # أعمدة متلاصقة
-                    fig.update_layout(showlegend=False, height=350, bargap=0)
+            # --- GRAPHIQUES (TOP & TREND) ---
+            c_detract, c_trend = st.columns(2)
+
+            with c_detract:
+                st.subheader("Top Détracteurs")
+                detr_df = df_filtered[df_filtered['sentiment'] == 'Négatif']
+                if not detr_df.empty:
+                    stats = detr_df.groupby('author')[['metrics']].sum().reset_index().sort_values('metrics', ascending=False).head(10)
+                    fig = px.bar(stats, x='metrics', y='author', orientation='h', text='metrics', color_discrete_sequence=['#e0245e'])
+                    fig.update_layout(yaxis=dict(autorange="reversed"), height=350, title=None)
                     st.plotly_chart(fig, use_container_width=True)
-                except: st.warning("Données insuffisantes")
-            else: st.info("Pas de données polarisées dans cette période.")
+                else:
+                    st.success("R.A.S")
 
-        st.divider()
+            with c_trend:
+                st.subheader("Solde Net (4H)")
+                df_tr = df_filtered.dropna(subset=['date'])
+                
+                # --- PATCH: FILTRE STRICT SUR LES DATES ---
+                # On force le retrait de tout ce qui dépasse date_start ou date_end
+                # pour éviter l'affichage de données parasites dans le graphique temporel
+                mask_date = (df_tr['date'] >= pd.Timestamp(date_start)) & (df_tr['date'] <= pd.Timestamp(date_end) + pd.Timedelta(days=1))
+                df_tr = df_tr[mask_date]
+                # ------------------------------------------
 
-        g1, g2 = st.columns([1, 2])
-        with g1:
-            st.subheader("Répartition")
-            fig = px.pie(df_filtered, names='sentiment', color='sentiment', color_discrete_map=COLOR_MAP, hole=0.4)
-            fig.update_traces(textinfo='percent+label')
-            st.plotly_chart(fig, use_container_width=True)
+                df_pol = df_tr[df_tr['sentiment'] != 'Neutre']
+                if not df_pol.empty:
+                    try:
+                        agg = df_pol.groupby([pd.Grouper(key='date', freq='4H'), 'sentiment']).size().unstack(fill_value=0)
+                        if 'Positif' not in agg: agg['Positif'] = 0
+                        if 'Négatif' not in agg: agg['Négatif'] = 0
+                        agg['net'] = agg['Positif'] - agg['Négatif']
+                        agg['label'] = agg['net'].apply(lambda x: 'Positif' if x >= 0 else 'Négatif')
+                        agg = agg.reset_index()
+                        fig = px.bar(agg, x="date", y="net", color="label", color_discrete_map=COLOR_MAP)
+                        fig.update_layout(showlegend=False, height=350, bargap=0.2)
+                        st.plotly_chart(fig, use_container_width=True)
+                    except: st.warning("Données insuffisantes")
+                else: st.info("Pas de données polarisées dans cette période.")
 
-        with g2:
-            st.subheader("Matrice Impact")
-            fig = px.scatter(df_filtered, x="metrics", y="score", color="sentiment", color_discrete_map=COLOR_MAP, 
-                            hover_data=['text', 'author'], size="metrics", size_max=50)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        st.subheader("Registre")
-        disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']]
-        st.dataframe(disp, use_container_width=True, 
-                        column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d"),
-                                    "score": st.column_config.ProgressColumn("Score", min_value=-1, max_value=1),
-                                    "date": st.column_config.DatetimeColumn("Date", format="DD/MM HH:mm")})
-        
+            st.divider()
+
+            # --- GLOBAL VIZ ---
+            g1, g2 = st.columns([1, 2])
+            with g1:
+                st.subheader("Répartition")
+                fig = px.pie(df_filtered, names='sentiment', color='sentiment', color_discrete_map=COLOR_MAP, hole=0.4)
+                fig.update_traces(textinfo='percent+label')
+                st.plotly_chart(fig, use_container_width=True)
+
+            with g2:
+                st.subheader("Matrice Impact")
+                fig = px.scatter(df_filtered, x="metrics", y="score", color="sentiment", color_discrete_map=COLOR_MAP, 
+                               hover_data=['text', 'author'], size="metrics", size_max=50)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # --- TABLEAU ---
+            st.subheader("Registre")
+            disp = df_filtered[['source', 'date', 'author', 'text', 'sentiment', 'metrics', 'score']]
+            st.dataframe(disp, use_container_width=True, 
+                         column_config={"metrics": st.column_config.NumberColumn("Impact", format="%d"),
+                                        "score": st.column_config.ProgressColumn("Score", min_value=-1, max_value=1),
+                                        "date": st.column_config.DatetimeColumn("Date", format="DD/MM HH:mm")})
+            
+        else:
+            st.warning("Aucune donnée pour ce filtre.")
     else:
-        st.warning("Aucune donnée pour ce filtre.")
-else:
-    if not btn_start:
-        st.info("Bienvenue dans la War Room. Configurez les paramètres à gauche et cliquez sur 'Lancer'.")
+        st.warning("Aucun résultat.")
